@@ -29,20 +29,38 @@ const READ_SCRIPT =
   'xattr -px com.apple.metadata:_kMDItemUserTags "$1" 2>/dev/null' +
   " | xxd -r -p | plutil -convert xml1 -o - - 2>/dev/null || true";
 
-// $1 = file path, $2 = XML plist of the new tag array ("" = remove all tags).
+// $1 = file path, $2 = XML plist of the new tag array ("" = remove all tags),
+// $3 = legacy Finder label color code (0-7, 0 = none).
+//
+// The color is stored in two places: the modern tags xattr (read by Finder's
+// tag UI and Spotlight) and the legacy label bits 1-3 of byte 9 in
+// com.apple.FinderInfo (read by Hazel's "Color Label" condition, AppleScript's
+// `label index`, and other Carbon-era consumers). Finder writes both, so we do
+// too.
 const WRITE_SCRIPT = [
   "set -e",
   'f="$1"',
   'xml="$2"',
+  'idx="${3:-0}"',
   'if [ -z "$xml" ]; then',
   '  xattr -d com.apple.metadata:_kMDItemUserTags "$f" 2>/dev/null || true',
-  "  exit 0",
+  "else",
+  '  tmp="$(mktemp)"',
+  "  trap 'rm -f \"$tmp\"' EXIT",
+  '  printf \'%s\' "$xml" > "$tmp"',
+  '  plutil -convert binary1 "$tmp"',
+  "  xattr -wx com.apple.metadata:_kMDItemUserTags \"$(xxd -p \"$tmp\" | tr -d '\\n')\" \"$f\"",
   "fi",
-  'tmp="$(mktemp)"',
-  "trap 'rm -f \"$tmp\"' EXIT",
-  'printf \'%s\' "$xml" > "$tmp"',
-  'plutil -convert binary1 "$tmp"',
-  "xattr -wx com.apple.metadata:_kMDItemUserTags \"$(xxd -p \"$tmp\" | tr -d '\\n')\" \"$f\"",
+  'fi_hex="$(xattr -px com.apple.FinderInfo "$f" 2>/dev/null | tr -d \' \\n\')"',
+  '[ "${#fi_hex}" -eq 64 ] || fi_hex="$(printf \'%064d\' 0)"',
+  'b9="${fi_hex:18:2}"',
+  'nb9="$(printf \'%02x\' $(( (0x$b9 & 0xF1) | (idx << 1) )))"',
+  'fi_hex="${fi_hex:0:18}${nb9}${fi_hex:20}"',
+  'if [ "$fi_hex" = "$(printf \'%064d\' 0)" ]; then',
+  '  xattr -d com.apple.FinderInfo "$f" 2>/dev/null || true',
+  "else",
+  '  xattr -wx com.apple.FinderInfo "$fi_hex" "$f"',
+  "fi",
 ].join("\n");
 
 function currentFilePath() {
@@ -90,7 +108,7 @@ async function readTags(path) {
   return tags;
 }
 
-async function writeTags(path, tags) {
+async function writeTags(path, tags, colorIndex) {
   let xml = "";
   if (tags.length > 0) {
     xml =
@@ -107,6 +125,7 @@ async function writeTags(path, tags) {
     "iina-color-tag",
     path,
     xml,
+    String(colorIndex || 0),
   ]);
   if (status !== 0) throw new Error("xattr failed: " + stderr);
 }
@@ -127,7 +146,7 @@ async function applyColor(color) {
   try {
     const kept = (await readTags(path)).filter((t) => !isStandardColorTag(t));
     if (color) kept.push(color.name + "\n" + color.index);
-    await writeTags(path, kept);
+    await writeTags(path, kept, color ? color.index : 0);
     core.osd(color ? "Tagged " + color.name : "Color tag removed");
     refreshCheckmarks();
   } catch (err) {
