@@ -1,0 +1,13 @@
+{
+  "name": "Color Tag",
+  "identifier": "com.miksmitty.iina-color-tag",
+  "version": "0.1.0",
+  "ghVersion": 1,
+  "description": "Apply a macOS Finder color tag to the currently playing video file.",
+  "author": {
+    "name": "Mike Smith",
+    "url": "https://github.com/miksmitty"
+  },
+  "entry": "main.js",
+  "permissions": ["show-osd", "file-system"]
+}
