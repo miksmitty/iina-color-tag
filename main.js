@@ -12,13 +12,13 @@ const XATTR_KEY = "com.apple.metadata:_kMDItemUserTags";
 // Finder's standard color indices: 0=none, 1=Gray, 2=Green, 3=Purple,
 // 4=Blue, 5=Yellow, 6=Red, 7=Orange.
 const COLORS = [
-  { name: "Red", index: 6 },
-  { name: "Orange", index: 7 },
-  { name: "Yellow", index: 5 },
-  { name: "Green", index: 2 },
-  { name: "Blue", index: 4 },
-  { name: "Purple", index: 3 },
-  { name: "Gray", index: 1 },
+  { name: "Red", index: 6, key: "Alt+1" },
+  { name: "Orange", index: 7, key: "Alt+2" },
+  { name: "Yellow", index: 5, key: "Alt+3" },
+  { name: "Green", index: 2, key: "Alt+4" },
+  { name: "Blue", index: 4, key: "Alt+5" },
+  { name: "Purple", index: 3, key: "Alt+6" },
+  { name: "Gray", index: 1, key: "Alt+7" },
 ];
 
 const COLOR_NAMES = new Set(COLORS.map((c) => c.name));
@@ -155,12 +155,16 @@ async function applyColor(color) {
   }
 }
 
-const menuItems = { None: menu.item("None", () => applyColor(null)) };
+const menuItems = {
+  None: menu.item("None", () => applyColor(null), { keyBinding: "Alt+0" }),
+};
 const tagMenu = menu.item("Tag Color");
 tagMenu.addSubMenuItem(menuItems.None);
 tagMenu.addSubMenuItem(menu.separator());
 for (const color of COLORS) {
-  menuItems[color.name] = menu.item(color.name, () => applyColor(color));
+  menuItems[color.name] = menu.item(color.name, () => applyColor(color), {
+    keyBinding: color.key,
+  });
   tagMenu.addSubMenuItem(menuItems[color.name]);
 }
 menu.addItem(tagMenu);

@@ -38,9 +38,24 @@ Play a local video file, then pick **Plugins → Tag Color → Red** (or any oth
 color). An OSD message confirms the tag. **None** removes the color tag
 (custom tags are kept). Verify in Finder — the file shows the color dot.
 
-You can assign keyboard shortcuts to the menu items in
-**System Settings → Keyboard → Keyboard Shortcuts → App Shortcuts** for IINA,
-using the exact menu item titles (e.g. `Red`).
+### Keyboard shortcuts
+
+Shortcuts work whenever the player window is focused:
+
+| Shortcut | Action |
+| --- | --- |
+| ⌥1 | Red |
+| ⌥2 | Orange |
+| ⌥3 | Yellow |
+| ⌥4 | Green |
+| ⌥5 | Blue |
+| ⌥6 | Purple |
+| ⌥7 | Gray |
+| ⌥0 | Remove color tag |
+
+To change them, edit the `key` values in [main.js](main.js) (mpv
+[key binding format](https://mpv.io/manual/stable/#key-names), e.g.
+`Meta+Alt+1` for ⌘⌥1) and reload the plugin.
 
 ## Limitations
 
