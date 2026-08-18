@@ -2,6 +2,7 @@
   "name": "Color Tag",
   "identifier": "com.miksmitty.iina-color-tag",
   "version": "0.1.0",
+  "ghRepo": "miksmitty/iina-color-tag",
   "ghVersion": 1,
   "description": "Apply a macOS Finder color tag to the currently playing video file.",
   "author": {
