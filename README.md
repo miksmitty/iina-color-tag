@@ -52,6 +52,12 @@ Shortcuts work whenever the player window is focused:
 | ⌥6 | Purple |
 | ⌥7 | Gray |
 | ⌥0 | Remove color tag |
+| ⌥] | Next file in folder |
+| ⌥[ | Previous file in folder |
+
+**Next/Previous File in Folder** plays the adjacent video file from the same
+folder (Finder-style name order), regardless of the playlist — handy for
+triaging a folder: watch, tag with ⌥1–⌥7, then ⌥] to move on.
 
 To change them, edit the `key` values in [main.js](main.js) (mpv
 [key binding format](https://mpv.io/manual/stable/#key-names), e.g.

@@ -5,7 +5,7 @@
 // where each string is "Name\nColorIndex" (e.g. "Red\n6").
 // We shell out to xattr/plutil via utils.exec to read and write it.
 
-const { console, core, event, menu, utils } = iina;
+const { console, core, event, file, menu, utils } = iina;
 
 const XATTR_KEY = "com.apple.metadata:_kMDItemUserTags";
 
@@ -155,6 +155,44 @@ async function applyColor(color) {
   }
 }
 
+const VIDEO_EXTS = new Set([
+  "mp4", "m4v", "mkv", "mov", "avi", "wmv", "flv", "webm", "ts", "m2ts",
+  "mpg", "mpeg", "vob", "3gp", "ogv", "rmvb", "divx",
+]);
+
+function fileExt(name) {
+  const i = name.lastIndexOf(".");
+  return i < 0 ? "" : name.substring(i + 1).toLowerCase();
+}
+
+// NFC-normalize before comparing: the path from core.status.url and the
+// names from file.list can differ in Unicode form for accented characters.
+function nfc(s) {
+  return s.normalize ? s.normalize("NFC") : s;
+}
+
+function navigateFolder(offset) {
+  const path = currentFilePath();
+  if (!path) {
+    core.osd("Color Tag: no local file is playing");
+    return;
+  }
+  const dir = path.substring(0, path.lastIndexOf("/"));
+  const siblings = (file.list(dir, { includeSubDir: false }) || [])
+    .filter((e) => !e.isDir && VIDEO_EXTS.has(fileExt(e.filename)))
+    .map((e) => dir + "/" + e.filename)
+    .sort((a, b) =>
+      a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }),
+    );
+  const i = siblings.findIndex((p) => nfc(p) === nfc(path));
+  const target = i === -1 ? null : siblings[i + offset];
+  if (!target) {
+    core.osd(offset > 0 ? "No next file in folder" : "No previous file in folder");
+    return;
+  }
+  core.open(target);
+}
+
 const menuItems = {
   None: menu.item("None", () => applyColor(null), { keyBinding: "Alt+0" }),
 };
@@ -168,6 +206,16 @@ for (const color of COLORS) {
   tagMenu.addSubMenuItem(menuItems[color.name]);
 }
 menu.addItem(tagMenu);
+menu.addItem(
+  menu.item("Next File in Folder", () => navigateFolder(1), {
+    keyBinding: "Alt+]",
+  }),
+);
+menu.addItem(
+  menu.item("Previous File in Folder", () => navigateFolder(-1), {
+    keyBinding: "Alt+[",
+  }),
+);
 
 async function refreshCheckmarks() {
   const path = currentFilePath();
