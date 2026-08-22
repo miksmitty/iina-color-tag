@@ -171,7 +171,22 @@ function nfc(s) {
   return s.normalize ? s.normalize("NFC") : s;
 }
 
-function navigateFolder(offset) {
+// When navigating away from a file that has no color tag yet, mark it Red so
+// every visited file leaves the triage pass tagged one way or another.
+async function autoTagRedIfUntagged(path) {
+  try {
+    const tags = await readTags(path);
+    if (tags.some(isStandardColorTag)) return;
+    const red = COLORS.find((c) => c.name === "Red");
+    await writeTags(path, tags.concat([red.name + "\n" + red.index]), red.index);
+    core.osd("Auto-tagged Red");
+  } catch (err) {
+    console.error("Auto-tag failed: " + err);
+    core.osd("Color Tag: auto-tag failed (" + err + ")");
+  }
+}
+
+async function navigateFolder(offset) {
   const path = currentFilePath();
   if (!path) {
     core.osd("Color Tag: no local file is playing");
@@ -190,6 +205,7 @@ function navigateFolder(offset) {
     core.osd(offset > 0 ? "No next file in folder" : "No previous file in folder");
     return;
   }
+  await autoTagRedIfUntagged(path);
   core.open(target);
 }
 

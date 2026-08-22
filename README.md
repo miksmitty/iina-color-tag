@@ -59,6 +59,12 @@ Shortcuts work whenever the player window is focused:
 folder (Finder-style name order), regardless of the playlist — handy for
 triaging a folder: watch, tag with ⌥1–⌥7, then ⌥] to move on.
 
+When you navigate away from a file that has **no color tag**, it is
+automatically tagged **Red** — so every file you've visited ends up tagged,
+either explicitly by you or Red by default. Only the seven standard color
+tags count as "tagged" here; custom Finder tags alone won't prevent the Red
+default.
+
 To change them, edit the `key` values in [main.js](main.js) (mpv
 [key binding format](https://mpv.io/manual/stable/#key-names), e.g.
 `Meta+Alt+1` for ⌘⌥1) and reload the plugin.
