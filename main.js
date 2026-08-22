@@ -199,9 +199,43 @@ async function autoTagRedIfUntagged(path) {
 
 function listSiblings(dir) {
   return (file.list(dir, { includeSubDir: false }) || [])
-    .filter((e) => !e.isDir && VIDEO_EXTS.has(fileExt(e.filename)))
+    .filter(
+      (e) =>
+        !e.isDir &&
+        !e.filename.startsWith(".") && // AppleDouble ._* sidecars etc.
+        VIDEO_EXTS.has(fileExt(e.filename)),
+    )
     .map((e) => dir + "/" + e.filename)
     .sort(compareFinderStyle);
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function statFile(path) {
+  const { status, stdout } = await utils.exec("/usr/bin/stat", [
+    "-f",
+    "%z %m",
+    path,
+  ]);
+  if (status !== 0) return null;
+  const parts = stdout.trim().split(/\s+/).map(Number);
+  return { size: parts[0], mtime: parts[1] };
+}
+
+// A file is safe to hand to mpv if it exists, is non-empty, and is not still
+// being written: a video that is mid-copy into the folder exists but fails to
+// open ("Cannot open file or stream") because its tail isn't there yet. Files
+// untouched for a few seconds are assumed complete; recently modified ones
+// get a size-stability probe.
+async function isSafeToOpen(path) {
+  const s1 = await statFile(path);
+  if (!s1 || s1.size === 0) return false;
+  if (Date.now() / 1000 - s1.mtime > 5) return true;
+  await sleep(300);
+  const s2 = await statFile(path);
+  return s2 !== null && s2.size === s1.size;
 }
 
 // Pick the file adjacent to `ref` in its folder. `ref` itself may no longer
@@ -228,7 +262,7 @@ async function navigateFolder(offset) {
     }
     await autoTagRedIfUntagged(path);
     let ref = path;
-    for (let attempt = 0; attempt < 5; attempt++) {
+    for (let attempt = 0; attempt < 8; attempt++) {
       const target = pickTarget(ref, offset);
       if (!target) {
         core.osd(
@@ -236,12 +270,13 @@ async function navigateFolder(offset) {
         );
         return;
       }
-      if (file.exists(target)) {
+      if (await isSafeToOpen(target)) {
         core.open(target);
         return;
       }
       // The picked file was deleted between listing and opening (e.g. by a
-      // Hazel delete rule). Continue the search from its sort position.
+      // Hazel delete rule) or is still being copied in. Continue the search
+      // from its sort position.
       ref = target;
     }
     core.osd("Folder is changing too quickly — try again");
