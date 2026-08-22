@@ -171,9 +171,20 @@ function nfc(s) {
   return s.normalize ? s.normalize("NFC") : s;
 }
 
+function compareFinderStyle(a, b) {
+  return nfc(a).localeCompare(nfc(b), undefined, {
+    numeric: true,
+    sensitivity: "base",
+  });
+}
+
 // When navigating away from a file that has no color tag yet, mark it Red so
 // every visited file leaves the triage pass tagged one way or another.
 async function autoTagRedIfUntagged(path) {
+  // The file may already be gone: Hazel and similar tools can move it away
+  // seconds after it gets tagged, while IINA keeps playing from the open
+  // file handle.
+  if (!file.exists(path)) return;
   try {
     const tags = await readTags(path);
     if (tags.some(isStandardColorTag)) return;
@@ -196,11 +207,22 @@ async function navigateFolder(offset) {
   const siblings = (file.list(dir, { includeSubDir: false }) || [])
     .filter((e) => !e.isDir && VIDEO_EXTS.has(fileExt(e.filename)))
     .map((e) => dir + "/" + e.filename)
-    .sort((a, b) =>
-      a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }),
-    );
+    .sort(compareFinderStyle);
   const i = siblings.findIndex((p) => nfc(p) === nfc(path));
-  const target = i === -1 ? null : siblings[i + offset];
+  let target;
+  if (i !== -1) {
+    target = siblings[i + offset];
+  } else {
+    // The playing file is no longer in the folder (moved away by Hazel or
+    // similar). Navigate relative to where it would sort among the
+    // remaining files.
+    const after = siblings.findIndex((p) => compareFinderStyle(p, path) > 0);
+    if (offset > 0) {
+      target = after === -1 ? null : siblings[after];
+    } else {
+      target = after === -1 ? siblings[siblings.length - 1] : siblings[after - 1];
+    }
+  }
   if (!target) {
     core.osd(offset > 0 ? "No next file in folder" : "No previous file in folder");
     return;
