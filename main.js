@@ -197,38 +197,58 @@ async function autoTagRedIfUntagged(path) {
   }
 }
 
-async function navigateFolder(offset) {
-  const path = currentFilePath();
-  if (!path) {
-    core.osd("Color Tag: no local file is playing");
-    return;
-  }
-  const dir = path.substring(0, path.lastIndexOf("/"));
-  const siblings = (file.list(dir, { includeSubDir: false }) || [])
+function listSiblings(dir) {
+  return (file.list(dir, { includeSubDir: false }) || [])
     .filter((e) => !e.isDir && VIDEO_EXTS.has(fileExt(e.filename)))
     .map((e) => dir + "/" + e.filename)
     .sort(compareFinderStyle);
-  const i = siblings.findIndex((p) => nfc(p) === nfc(path));
-  let target;
-  if (i !== -1) {
-    target = siblings[i + offset];
-  } else {
-    // The playing file is no longer in the folder (moved away by Hazel or
-    // similar). Navigate relative to where it would sort among the
-    // remaining files.
-    const after = siblings.findIndex((p) => compareFinderStyle(p, path) > 0);
-    if (offset > 0) {
-      target = after === -1 ? null : siblings[after];
-    } else {
-      target = after === -1 ? siblings[siblings.length - 1] : siblings[after - 1];
+}
+
+// Pick the file adjacent to `ref` in its folder. `ref` itself may no longer
+// exist (moved or deleted by Hazel mid-session); in that case navigate
+// relative to where it would sort among the remaining files.
+function pickTarget(ref, offset) {
+  const dir = ref.substring(0, ref.lastIndexOf("/"));
+  const siblings = listSiblings(dir);
+  const i = siblings.findIndex((p) => nfc(p) === nfc(ref));
+  if (i !== -1) return siblings[i + offset] || null;
+  const after = siblings.findIndex((p) => compareFinderStyle(p, ref) > 0);
+  if (offset > 0) return after === -1 ? null : siblings[after];
+  return after === -1
+    ? siblings[siblings.length - 1] || null
+    : siblings[after - 1] || null;
+}
+
+async function navigateFolder(offset) {
+  try {
+    const path = currentFilePath();
+    if (!path) {
+      core.osd("Color Tag: no local file is playing");
+      return;
     }
+    await autoTagRedIfUntagged(path);
+    let ref = path;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const target = pickTarget(ref, offset);
+      if (!target) {
+        core.osd(
+          offset > 0 ? "No next file in folder" : "No previous file in folder",
+        );
+        return;
+      }
+      if (file.exists(target)) {
+        core.open(target);
+        return;
+      }
+      // The picked file was deleted between listing and opening (e.g. by a
+      // Hazel delete rule). Continue the search from its sort position.
+      ref = target;
+    }
+    core.osd("Folder is changing too quickly — try again");
+  } catch (err) {
+    console.error("Navigation failed: " + err);
+    core.osd("Color Tag: navigation failed (" + err + ")");
   }
-  if (!target) {
-    core.osd(offset > 0 ? "No next file in folder" : "No previous file in folder");
-    return;
-  }
-  await autoTagRedIfUntagged(path);
-  core.open(target);
 }
 
 const menuItems = {
@@ -256,11 +276,15 @@ menu.addItem(
 );
 
 async function refreshCheckmarks() {
-  const path = currentFilePath();
-  const current = path ? await currentColorName(path) : null;
-  menuItems.None.selected = current === null && path !== null;
-  for (const color of COLORS) {
-    menuItems[color.name].selected = current === color.name;
+  try {
+    const path = currentFilePath();
+    const current = path ? await currentColorName(path) : null;
+    menuItems.None.selected = current === null && path !== null;
+    for (const color of COLORS) {
+      menuItems[color.name].selected = current === color.name;
+    }
+  } catch (err) {
+    console.error("Failed to refresh menu checkmarks: " + err);
   }
 }
 
