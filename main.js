@@ -136,6 +136,10 @@ async function currentColorName(path) {
   return colorTag ? colorTag.split("\n")[0] : null;
 }
 
+async function hasColorTag(path) {
+  return (await readTags(path)).some(isStandardColorTag);
+}
+
 // color = null means "remove the color tag".
 async function applyColor(color) {
   const path = currentFilePath();
@@ -262,7 +266,7 @@ async function navigateFolder(offset) {
     }
     await autoTagRedIfUntagged(path);
     let ref = path;
-    for (let attempt = 0; attempt < 8; attempt++) {
+    for (let attempt = 0; attempt < 32; attempt++) {
       const target = pickTarget(ref, offset);
       if (!target) {
         core.osd(
@@ -270,13 +274,16 @@ async function navigateFolder(offset) {
         );
         return;
       }
-      if (await isSafeToOpen(target)) {
+      // Already-tagged files have been triaged — a Red one is just waiting
+      // for Hazel to delete it, which can lag by a few seconds. Never land
+      // on them.
+      if (!(await hasColorTag(target)) && (await isSafeToOpen(target))) {
         core.open(target);
         return;
       }
-      // The picked file was deleted between listing and opening (e.g. by a
-      // Hazel delete rule) or is still being copied in. Continue the search
-      // from its sort position.
+      // The picked file was tagged already, deleted between listing and
+      // opening (e.g. by a Hazel delete rule), or is still being copied in.
+      // Continue the search from its sort position.
       ref = target;
     }
     core.osd("Folder is changing too quickly — try again");
