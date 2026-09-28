@@ -301,12 +301,12 @@ for (const color of COLORS) {
 menu.addItem(tagMenu);
 menu.addItem(
   menu.item("Next File in Folder", () => navigateFolder(1), {
-    keyBinding: "Alt+]",
+    keyBinding: "]",
   }),
 );
 menu.addItem(
   menu.item("Previous File in Folder", () => navigateFolder(-1), {
-    keyBinding: "Alt+[",
+    keyBinding: "[",
   }),
 );
 
