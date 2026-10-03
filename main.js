@@ -23,6 +23,19 @@ const COLORS = [
 
 const COLOR_NAMES = new Set(COLORS.map((c) => c.name));
 
+// Triage mode — auto-tagging Red on navigate and skipping already-tagged
+// files — only applies inside these folder trees (the ones Hazel sweeps).
+// Everywhere else, [ and ] are plain folder navigation.
+const REVIEW_FOLDERS = ["/Volumes/Lexar_2TB/D_Review"];
+
+function isInReviewFolder(path) {
+  const p = nfc(path).toLowerCase();
+  return REVIEW_FOLDERS.some((folder) => {
+    const base = nfc(folder).toLowerCase().replace(/\/+$/, "");
+    return p === base || p.startsWith(base + "/");
+  });
+}
+
 // Prints the tag xattr as an XML plist on stdout; empty output if the file
 // has no tags.
 const READ_SCRIPT =
@@ -264,7 +277,8 @@ async function navigateFolder(offset) {
       core.osd("Color Tag: no local file is playing");
       return;
     }
-    await autoTagRedIfUntagged(path);
+    const triage = isInReviewFolder(path);
+    if (triage) await autoTagRedIfUntagged(path);
     let ref = path;
     for (let attempt = 0; attempt < 32; attempt++) {
       const target = pickTarget(ref, offset);
@@ -274,10 +288,11 @@ async function navigateFolder(offset) {
         );
         return;
       }
-      // Already-tagged files have been triaged — a Red one is just waiting
-      // for Hazel to delete it, which can lag by a few seconds. Never land
-      // on them.
-      if (!(await hasColorTag(target)) && (await isSafeToOpen(target))) {
+      // In the review folder, already-tagged files have been triaged — a
+      // Red one is just waiting for Hazel to delete it, which can lag by a
+      // few seconds. Never land on them.
+      const tagged = triage && (await hasColorTag(target));
+      if (!tagged && (await isSafeToOpen(target))) {
         core.open(target);
         return;
       }

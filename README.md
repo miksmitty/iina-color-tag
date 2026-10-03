@@ -57,15 +57,21 @@ Shortcuts work whenever the player window is focused:
 
 **Next/Previous File in Folder** plays the adjacent video file from the same
 folder (Finder-style name order), regardless of the playlist — handy for
-triaging a folder: watch, tag with ⌥1–⌥7, then ] to move on. Files that
-already have a color tag are skipped: they've been triaged, and a Red one
-may just be waiting on a cleanup rule (e.g. Hazel) to delete it.
+triaging a folder: watch, tag with ⌥1–⌥7, then ] to move on.
 
-When you navigate away from a file that has **no color tag**, it is
-automatically tagged **Red** — so every file you've visited ends up tagged,
-either explicitly by you or Red by default. Only the seven standard color
-tags count as "tagged" here; custom Finder tags alone won't prevent the Red
-default.
+Inside the review folders listed in `REVIEW_FOLDERS` at the top of
+[main.js](main.js) (including their subfolders), navigation runs in **triage
+mode**: files that already have a color tag are skipped — they've been
+triaged, and a Red one may just be waiting on a cleanup rule (e.g. Hazel)
+to delete it — and navigating away from an untagged file auto-tags it Red
+(see below). In any other folder, [ and ] are plain navigation: nothing is
+tagged and nothing is skipped.
+
+In triage mode, when you navigate away from a file that has **no color
+tag**, it is automatically tagged **Red** — so every file you've visited
+ends up tagged, either explicitly by you or Red by default. Only the seven
+standard color tags count as "tagged" here; custom Finder tags alone won't
+prevent the Red default.
 
 To change them, edit the `key` values in [main.js](main.js) (mpv
 [key binding format](https://mpv.io/manual/stable/#key-names), e.g.
