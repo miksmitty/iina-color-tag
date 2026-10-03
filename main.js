@@ -28,6 +28,10 @@ const COLOR_NAMES = new Set(COLORS.map((c) => c.name));
 // Everywhere else, [ and ] are plain folder navigation.
 const REVIEW_FOLDERS = ["/Volumes/Lexar_2TB/D_Review"];
 
+// The local RSS parser app; ⌥Q sends the playing file there for an
+// alternate-quality search via its /?altq=<filename> deep link.
+const RSS_PARSER_URL = "http://localhost:3000";
+
 function isInReviewFolder(path) {
   const p = nfc(path).toLowerCase();
   return REVIEW_FOLDERS.some((folder) => {
@@ -330,6 +334,29 @@ menu.addItem(
   menu.item("Previous File in Folder", () => navigateFolder(-1), {
     keyBinding: "[",
   }),
+);
+menu.addItem(
+  menu.item(
+    "Search Alternate Quality…",
+    async () => {
+      const path = currentFilePath();
+      if (!path) {
+        core.osd("Color Tag: no local file is playing");
+        return;
+      }
+      const name = path.substring(path.lastIndexOf("/") + 1);
+      try {
+        await utils.exec("/usr/bin/open", [
+          RSS_PARSER_URL + "/?altq=" + encodeURIComponent(name),
+        ]);
+        core.osd("Searching alternate qualities…");
+      } catch (err) {
+        console.error("Alternate-quality search failed: " + err);
+        core.osd("Color Tag: couldn't open RSS parser (" + err + ")");
+      }
+    },
+    { keyBinding: "Alt+q" },
+  ),
 );
 
 async function refreshCheckmarks() {
