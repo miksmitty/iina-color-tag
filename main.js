@@ -5,7 +5,7 @@
 // where each string is "Name\nColorIndex" (e.g. "Red\n6").
 // We shell out to xattr/plutil via utils.exec to read and write it.
 
-const { console, core, event, file, menu, utils } = iina;
+const { console, core, event, file, menu, overlay, utils } = iina;
 
 const XATTR_KEY = "com.apple.metadata:_kMDItemUserTags";
 
@@ -23,13 +23,87 @@ const COLORS = [
 
 const COLOR_NAMES = new Set(COLORS.map((c) => c.name));
 
+// CSS colors for the tag flash badge, matching Finder's tag swatches.
+const BADGE_COLORS = {
+  Red: "#ff3b30",
+  Orange: "#ff9500",
+  Yellow: "#ffcc00",
+  Green: "#28cd41",
+  Blue: "#007aff",
+  Purple: "#af52de",
+  Gray: "#8e8e93",
+};
+
+// --- Tag flash: a brief badge over the video confirming what was tagged ---
+// The overlay is set up lazily on first use: touching the overlay API at
+// plugin-load time throws during IINA startup (before the player window's
+// overlay exists), which killed the whole plugin — no menu, no keybindings.
+let overlayReady = false;
+function ensureOverlay() {
+  if (overlayReady) return;
+  overlay.simpleMode();
+  overlay.setStyle(`
+    body { margin: 0; overflow: hidden; }
+    .tag-flash {
+      position: absolute; top: 24px; right: 24px;
+      transform-origin: top right;
+      display: flex; align-items: center; gap: 14px;
+      padding: 18px 30px; border-radius: 18px;
+      background: rgba(28, 28, 30, 0.82);
+      font: 600 30px -apple-system, BlinkMacSystemFont, sans-serif;
+      color: #fff; white-space: nowrap;
+      animation: tag-flash 1.15s ease-out forwards;
+    }
+    .tag-flash .dot {
+      width: 34px; height: 34px; border-radius: 50%;
+      background: var(--c);
+      box-shadow: 0 0 14px 2px var(--c);
+    }
+    .tag-flash.removed .dot {
+      background: transparent; box-shadow: none;
+      border: 3px solid #8e8e93;
+    }
+    @keyframes tag-flash {
+      0%   { opacity: 0; transform: scale(0.7); }
+      12%  { opacity: 1; transform: scale(1); }
+      70%  { opacity: 1; transform: scale(1); }
+      100% { opacity: 0; transform: scale(1); }
+    }
+  `);
+  overlayReady = true;
+}
+
+let flashToken = 0;
+// colorName = null draws the hollow "tag removed" dot.
+function flashTag(label, colorName) {
+  try {
+    ensureOverlay();
+    const token = ++flashToken;
+    const c = BADGE_COLORS[colorName] || "#8e8e93";
+    overlay.setContent(
+      `<div class="tag-flash${colorName ? "" : " removed"}" style="--c:${c}">` +
+        `<span class="dot"></span><span>${label}</span></div>`,
+    );
+    overlay.show();
+    // Hide only if no newer flash has replaced this one in the meantime
+    setTimeout(() => {
+      if (token === flashToken) overlay.hide();
+    }, 1200);
+  } catch (err) {
+    // The badge is cosmetic - never let it break tagging. Fall back to OSD.
+    console.error("Tag flash overlay failed: " + err);
+    core.osd(label);
+  }
+}
+
 // Triage mode — auto-tagging Red on navigate and skipping already-tagged
 // files — only applies inside these folder trees (the ones Hazel sweeps).
 // Everywhere else, [ and ] are plain folder navigation.
 const REVIEW_FOLDERS = ["/Volumes/Lexar_2TB/D_Review"];
 
 // The local RSS parser app; ⌥Q sends the playing file there for an
-// alternate-quality search via its /?altq=<filename> deep link.
+// alternate-quality search (/?altq=<filename>) and ⌥P for a performer
+// search (/?performer=<filename>, name extracted on the parser side).
 const RSS_PARSER_URL = "http://localhost:3000";
 
 function isInReviewFolder(path) {
@@ -168,7 +242,8 @@ async function applyColor(color) {
     const kept = (await readTags(path)).filter((t) => !isStandardColorTag(t));
     if (color) kept.push(color.name + "\n" + color.index);
     await writeTags(path, kept, color ? color.index : 0);
-    core.osd(color ? "Tagged " + color.name : "Color tag removed");
+    if (color) flashTag("Tagged " + color.name, color.name);
+    else flashTag("Color tag removed", null);
     refreshCheckmarks();
   } catch (err) {
     console.error("Failed to set tag: " + err);
@@ -211,7 +286,7 @@ async function autoTagRedIfUntagged(path) {
     if (tags.some(isStandardColorTag)) return;
     const red = COLORS.find((c) => c.name === "Red");
     await writeTags(path, tags.concat([red.name + "\n" + red.index]), red.index);
-    core.osd("Auto-tagged Red");
+    flashTag("Auto-tagged Red", "Red");
   } catch (err) {
     console.error("Auto-tag failed: " + err);
     core.osd("Color Tag: auto-tag failed (" + err + ")");
@@ -335,27 +410,38 @@ menu.addItem(
     keyBinding: "[",
   }),
 );
+// Send the playing file's name to the RSS parser via one of its deep links
+// (/?altq=... or /?performer=...), opening it in the default browser.
+async function sendToRssParser(param, osdMessage) {
+  const path = currentFilePath();
+  if (!path) {
+    core.osd("Color Tag: no local file is playing");
+    return;
+  }
+  const name = path.substring(path.lastIndexOf("/") + 1);
+  try {
+    await utils.exec("/usr/bin/open", [
+      RSS_PARSER_URL + "/?" + param + "=" + encodeURIComponent(name),
+    ]);
+    core.osd(osdMessage);
+  } catch (err) {
+    console.error("RSS parser deep link failed: " + err);
+    core.osd("Color Tag: couldn't open RSS parser (" + err + ")");
+  }
+}
+
 menu.addItem(
   menu.item(
     "Search Alternate Quality…",
-    async () => {
-      const path = currentFilePath();
-      if (!path) {
-        core.osd("Color Tag: no local file is playing");
-        return;
-      }
-      const name = path.substring(path.lastIndexOf("/") + 1);
-      try {
-        await utils.exec("/usr/bin/open", [
-          RSS_PARSER_URL + "/?altq=" + encodeURIComponent(name),
-        ]);
-        core.osd("Searching alternate qualities…");
-      } catch (err) {
-        console.error("Alternate-quality search failed: " + err);
-        core.osd("Color Tag: couldn't open RSS parser (" + err + ")");
-      }
-    },
+    () => sendToRssParser("altq", "Searching alternate qualities…"),
     { keyBinding: "Alt+q" },
+  ),
+);
+menu.addItem(
+  menu.item(
+    "Search Performer…",
+    () => sendToRssParser("performer", "Searching performer…"),
+    { keyBinding: "Alt+p" },
   ),
 );
 
@@ -374,4 +460,13 @@ async function refreshCheckmarks() {
 
 event.on("mpv.file-loaded", () => {
   refreshCheckmarks();
+  // Warm up the overlay webview now: simple-mode content set in the same
+  // tick as the first setup call never renders (the webview loads
+  // asynchronously), so without this the FIRST tag flash after launch
+  // would be lost.
+  try {
+    ensureOverlay();
+  } catch (err) {
+    console.error("Overlay warm-up failed: " + err);
+  }
 });

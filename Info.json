@@ -10,5 +10,5 @@
     "url": "https://github.com/miksmitty"
   },
   "entry": "main.js",
-  "permissions": ["show-osd", "file-system"]
+  "permissions": ["show-osd", "file-system", "video-overlay"]
 }

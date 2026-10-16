@@ -55,6 +55,7 @@ Shortcuts work whenever the player window is focused:
 | ] | Next file in folder |
 | [ | Previous file in folder |
 | ⌥Q | Search alternate quality in the RSS parser app |
+| ⌥P | Search performer in the RSS parser app |
 
 **Next/Previous File in Folder** plays the adjacent video file from the same
 folder (Finder-style name order), regardless of the playlist — handy for
@@ -68,11 +69,11 @@ to delete it — and navigating away from an untagged file auto-tags it Red
 (see below). In any other folder, [ and ] are plain navigation: nothing is
 tagged and nothing is skipped.
 
-**Search Alternate Quality** (⌥Q) sends the playing file's name to the
-local RSS parser app (`RSS_PARSER_URL` in [main.js](main.js), default
-`http://localhost:3000`) via its `/?altq=<filename>` deep link, which runs
-its alternate-quality search — the same one its drag-a-file-in feature
-uses. The app's server must be running.
+**Search Alternate Quality** (⌥Q) and **Search Performer** (⌥P) send the
+playing file's name to the local RSS parser app (`RSS_PARSER_URL` in
+[main.js](main.js), default `http://localhost:3000`) via its
+`/?altq=<filename>` and `/?performer=<filename>` deep links — the same
+searches its drag-a-file-in feature uses. The app's server must be running.
 
 In triage mode, when you navigate away from a file that has **no color
 tag**, it is automatically tagged **Red** — so every file you've visited
